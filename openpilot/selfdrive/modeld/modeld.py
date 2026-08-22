@@ -29,7 +29,7 @@ from openpilot.selfdrive.modeld.parse_model_outputs import Parser
 from openpilot.selfdrive.modeld.compile_modeld import make_input_queues, WARP_INPUTS, POLICY_INPUTS
 from openpilot.selfdrive.modeld.fill_model_msg import fill_model_msg, fill_driving_model_data, fill_pose_msg, PublishState
 from openpilot.common.file_chunker import open_file_chunked
-from openpilot.selfdrive.modeld.load_progress import open_with_progress
+from openpilot.selfdrive.modeld.load_progress import open_with_progress, warmup_progress
 from openpilot.selfdrive.modeld.constants import ModelConstants, Plan
 from openpilot.selfdrive.modeld.helpers import usbgpu_present, usbgpu_compiled, modeld_pkl_path, get_tg_input_devices, load_oob
 
@@ -260,7 +260,8 @@ def main(demo=False):
       nonlocal big_model
       try:
         m = ModelState(vipc_client_main.width, vipc_client_main.height, True)
-        m.warmup()
+        with warmup_progress():
+          m.warmup()
         big_model = m
       except Exception:
         cloudlog.exception("big model load failed")

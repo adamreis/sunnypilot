@@ -25,7 +25,7 @@ from opendbc.car.car_helpers import get_demo_car_params
 from tinygrad.tensor import Tensor
 
 from openpilot.common.file_chunker import open_file_chunked
-from openpilot.selfdrive.modeld.load_progress import open_with_progress
+from openpilot.selfdrive.modeld.load_progress import open_with_progress, warmup_progress
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
 from openpilot.common.filter_simple import FirstOrderFilter
@@ -187,7 +187,8 @@ class ModelState(ModelStateBase):
       self.warp(**{k: self.input_queues[k] for k in WARP_INPUTS}, frame=frame_tensor, big_frame=big_frame_tensor)
 
     if self.usbgpu:
-      self.warmup()
+      with warmup_progress():
+        self.warmup()
 
   def warmup(self) -> None:
     dummy_frames = {k: np.zeros(self.frame_buf_params[k][3], dtype=np.uint8) for k in self._vision_input_names}
