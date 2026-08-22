@@ -223,7 +223,7 @@ class HudRenderer(Widget):
     if icon is not self._egpu_icon:
       self._egpu_fade_time = rl.get_time()
       self._egpu_icon = icon
-    alpha = self._egpu_alpha_filter.update(loading or 0 < rl.get_time() - self._egpu_fade_time < SET_SPEED_PERSISTENCE)
+    alpha = self._egpu_alpha_filter.update(True)
     if alpha < 1e-2:
       return
 
