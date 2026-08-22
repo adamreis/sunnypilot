@@ -233,9 +233,15 @@ class HudRenderer(Widget):
 
     if loading:
       pct_text = f"{ui_state.usbgpu_load_progress}%"
-      pct_size = measure_text_cached(self._font_bold, pct_text, FONT_SIZES.max_speed)
-      pct_pos = rl.Vector2(pos.x - 8 - pct_size.x, pos.y + (icon.height - pct_size.y) / 2)
-      rl.draw_text_ex(self._font_bold, pct_text, pct_pos, FONT_SIZES.max_speed, 0, rl.WHITE)
+      size = FONT_SIZES.max_speed
+      cell = measure_text_cached(self._font_bold, "0", size)  # fixed digit cell so the number doesn't shift
+      widths = [cell.x if c.isdigit() else measure_text_cached(self._font_bold, c, size).x for c in pct_text]
+      x = pos.x - 8 - sum(widths)
+      y = pos.y + (icon.height - cell.y) / 2
+      for c, w in zip(pct_text, widths):
+        glyph = measure_text_cached(self._font_bold, c, size).x
+        rl.draw_text_ex(self._font_bold, c, rl.Vector2(x + (w - glyph) / 2, y), size, 0, rl.WHITE)
+        x += w
 
   def _draw_steering_wheel(self, rect: rl.Rectangle) -> None:
     wheel_txt = self._txt_wheel_critical if self._show_wheel_critical else self._txt_wheel
