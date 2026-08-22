@@ -234,7 +234,7 @@ class HudRenderer(Widget):
     if loading:
       pct_text = f"{ui_state.usbgpu_load_progress}%"
       size = FONT_SIZES.max_speed
-      cell = measure_text_cached(self._font_bold, "0", size)  # fixed digit cell so the number doesn't shift
+      cell = measure_text_cached(self._font_bold, "0", size)
       widths = [cell.x if c.isdigit() else measure_text_cached(self._font_bold, c, size).x for c in pct_text]
       x = pos.x - 8 - sum(widths)
       y = pos.y + (icon.height - cell.y) / 2
