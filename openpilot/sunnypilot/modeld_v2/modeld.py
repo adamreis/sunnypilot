@@ -100,6 +100,7 @@ class ModelState(ModelStateBase):
     self.MIN_LAT_CONTROL_SPEED = 0.3
     self.PLANPLUS_CONTROL: float = 1.0
     self.usbgpu = usbgpu
+    self.non_finite_outputs = 0  # published via chestnutState; see ChestnutState.send()
 
     pkl_path = _find_driving_pkl(model_bundle)
     assert pkl_path is not None, "No driving pkl found — all models must be compiled with compile_modeld.py"
@@ -263,6 +264,7 @@ class ModelState(ModelStateBase):
       # frames while big model uses prev_feat". Checking the parsed 'plan' after
       # the write inspects ~10% of the output and 0% of hidden_state.
       if self.usbgpu and not np.all(np.isfinite(model_output)):
+        self.non_finite_outputs += 1
         cloudlog.error("model output not finite, dropping frame")
         return None
 
@@ -278,6 +280,7 @@ class ModelState(ModelStateBase):
       # non-finite policy output is just as unsafe as a non-finite vision output.
       if self.usbgpu and not (np.all(np.isfinite(vision_output))
                               and all(np.all(np.isfinite(p)) for p in policy_outputs)):
+        self.non_finite_outputs += 1
         cloudlog.error("model output not finite, dropping frame")
         return None
 
@@ -562,6 +565,7 @@ def main(demo=False):
     last_vipc_frame_id = meta_main.frame_id
 
     if chestnut_state is not None and run_count % round(model.constants.MODEL_FREQ / SERVICE_LIST['chestnutState'].frequency) == 0:
+      chestnut_state.non_finite_outputs = model.non_finite_outputs
       chestnut_state.send()
 
 if __name__ == "__main__":

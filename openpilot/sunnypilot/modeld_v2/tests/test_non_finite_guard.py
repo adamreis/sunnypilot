@@ -124,6 +124,35 @@ def scenario_guard_inactive_without_usbgpu():
     assert drive(ms, supercombo_output(hidden_state_nan=True)) is not None
 
 
+def scenario_counter_tracks_drops():
+  """Dropped frames must be countable.
+
+  A dropped frame publishes nothing, so the drop is invisible to every consumer
+  except chestnutState -- which keeps publishing during the outage. Without this
+  counter, sustained NaN is silent until it crosses the 16 Hz min_freq threshold
+  (20% frame loss), i.e. ~4 drops/sec can go unreported indefinitely.
+  """
+  with model_state() as ms:
+    assert ms.non_finite_outputs == 0
+
+    drive(ms, supercombo_output())
+    assert ms.non_finite_outputs == 0, 'a clean frame must not increment the counter'
+
+    for expected in (1, 2, 3):
+      drive(ms, supercombo_output(hidden_state_nan=True))
+      assert ms.non_finite_outputs == expected, \
+        f'expected {expected} drops, counter says {ms.non_finite_outputs}'
+
+    drive(ms, supercombo_output())
+    assert ms.non_finite_outputs == 3, 'counter must be monotonic, not reset by a good frame'
+
+
+def scenario_counter_inactive_without_usbgpu():
+  with model_state(usbgpu=False) as ms:
+    drive(ms, supercombo_output(hidden_state_nan=True))
+    assert ms.non_finite_outputs == 0
+
+
 # --- pytest entry points -----------------------------------------------------
 
 def test_non_finite_in_hidden_state_never_reaches_prev_feat():
@@ -140,6 +169,14 @@ def test_recovers_on_next_clean_frame():
 
 def test_guard_inactive_without_usbgpu():
   scenario_guard_inactive_without_usbgpu()
+
+
+def test_counter_tracks_drops():
+  scenario_counter_tracks_drops()
+
+
+def test_counter_inactive_without_usbgpu():
+  scenario_counter_inactive_without_usbgpu()
 
 
 if __name__ == '__main__':
