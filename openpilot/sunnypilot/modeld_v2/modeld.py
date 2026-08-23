@@ -255,12 +255,32 @@ class ModelState(ModelStateBase):
 
     if self._combined_model_type == 'supercombo':
       model_output = raw_outputs.numpy().flatten()
+
+      # Guard BEFORE anything is latched. hidden_state feeds back into
+      # features_buffer on the next frame, so a non-finite value that reaches
+      # prev_feat poisons the recurrent state and every later frame that samples
+      # it. See commaai/openpilot#38556: "we must drop non-finite model output
+      # frames while big model uses prev_feat". Checking the parsed 'plan' after
+      # the write inspects ~10% of the output and 0% of hidden_state.
+      if self.usbgpu and not np.all(np.isfinite(model_output)):
+        cloudlog.error("model output not finite, dropping frame")
+        return None
+
       sliced = {k: model_output[np.newaxis, v] for k, v in self.vision_output_slices.items()}
       outputs = self.parser.parse_outputs(sliced)
       if 'prev_feat' in self.numpy_inputs:
         self.numpy_inputs['prev_feat'][:] = model_output[self.vision_output_slices['hidden_state']]
     else:
       vision_output = raw_outputs[0].numpy().flatten()
+      policy_outputs = [raw_outputs[i + 1].numpy().flatten() for i in range(len(self._policy_slices_list))]
+
+      # Same guard, before prev_feat is written. Every head is checked: a
+      # non-finite policy output is just as unsafe as a non-finite vision output.
+      if self.usbgpu and not (np.all(np.isfinite(vision_output))
+                              and all(np.all(np.isfinite(p)) for p in policy_outputs)):
+        cloudlog.error("model output not finite, dropping frame")
+        return None
+
       vision_sliced = {k: vision_output[np.newaxis, v] for k, v in self.vision_output_slices.items()}
       outputs = self.parser.parse_vision_outputs(vision_sliced)
 
@@ -268,7 +288,7 @@ class ModelState(ModelStateBase):
         self.numpy_inputs['prev_feat'][:] = vision_output[self.vision_output_slices['hidden_state']]
 
       for i, policy_slices in enumerate(self._policy_slices_list):
-        policy_output = raw_outputs[i + 1].numpy().flatten()
+        policy_output = policy_outputs[i]
         policy_sliced = {k: policy_output[np.newaxis, v] for k, v in policy_slices.items()}
         parsed = self.parser.parse_policy_outputs(policy_sliced)
         if ('off' in self._policy_keys[i]
@@ -286,10 +306,6 @@ class ModelState(ModelStateBase):
       buf = self.numpy_inputs['prev_desired_curv']
       buf[0, :-1] = buf[0, 1:]
       buf[0, -1, :] = outputs['desired_curvature'][0, :] if not self.mlsim else 0
-
-    if self.usbgpu and not np.all(np.isfinite(outputs.get('plan', np.array([0.])))):
-      cloudlog.error("model output not finite, dropping frame")
-      return None
 
     return outputs
 
