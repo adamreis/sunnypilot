@@ -81,6 +81,9 @@ class ChestnutState:
     self.valid = True
     self.sends = 0
     self.metrics = {}
+    # set by the owner each cycle; chestnutState keeps publishing while frames
+    # are being dropped, so it is the only carrier that survives the outage.
+    self.non_finite_outputs = 0
 
   @cached_property
   def power_limit(self) -> int:
@@ -123,6 +126,8 @@ class ChestnutState:
         asm_valid = True
       except Exception:
         pass
+
+    state.nonFiniteOutputs = self.non_finite_outputs
 
     msg.valid = asm_valid and (not self.big or self.valid)
     self.pm.send('chestnutState', msg)
