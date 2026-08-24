@@ -210,6 +210,11 @@ class HWQueue(Generic[SignalType, HCQDeviceType, ProgramType, ArgsStateType]):
 
   def bind_sints_to_mem(self, *vals:sint, mem:MMIOInterface, fmt, mask:int|None=None, offset:int=0):
     mv = mem.view(offset=offset, size=len(vals)*8, fmt=fmt)
+    # Fast path for the common all-concrete, no-mask case: one transfer instead
+    # of one per value, which on a USB-backed device is one round-trip per value.
+    if mask is None and vals and all(isinstance(v, int) for v in vals) and fmt in ('I', 'Q'):
+      mv[0:len(vals)] = array.array(fmt, vals)
+      return
     for i, val in enumerate(vals):
       if isinstance(val, int): mv[i] = val if mask is None else ((mv[i] & ~mask) | val)
       else: self.mv_sints.append((mv, i, self._new_sym(val), mask))
