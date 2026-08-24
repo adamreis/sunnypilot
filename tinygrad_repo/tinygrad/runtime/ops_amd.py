@@ -397,7 +397,9 @@ class AMDComputeQueue(HWQueue):
     self.binded_device = dev
     self.hw_page = dev.allocator.alloc(len(self._q) * 4, BufferSpec(cpu_access=True, nolru=True, uncached=True))
     hw_view = self.hw_page.cpu_view().view(fmt='I')
-    for i, value in enumerate(self._q): hw_view[i] = value
+    # One USB round-trip instead of one per dword: over PCIe this loop is free,
+    # over the USB bridge each assignment is a control+bulk transfer pair.
+    if len(self._q): hw_view[0:len(self._q)] = array.array('I', self._q)
 
     self.indirect_cmd = [self.pm4.PACKET3(self.pm4.PACKET3_INDIRECT_BUFFER, 2), *data64_le(self.hw_page.va_addr),
                          len(self._q) | self.pm4.INDIRECT_BUFFER_VALID]
@@ -513,7 +515,7 @@ class AMDCopyQueue(HWQueue):
     self.binded_device = dev
     self.hw_page = dev.allocator.alloc((qsz:=round_up(len(self._q), 8)) * 4, BufferSpec(cpu_access=True, nolru=True, uncached=True))
     hw_view = self.hw_page.cpu_view().view(fmt='I')
-    for i in range(qsz): hw_view[i] = self._q[i] if i < len(self._q) else 0
+    if qsz: hw_view[0:qsz] = array.array('I', list(self._q) + [0] * (qsz - len(self._q)))
 
     self.indirect_cmd = [self.sdma.SDMA_OP_INDIRECT | self.sdma.SDMA_PKT_INDIRECT_HEADER_VMID(0), *data64_le(self.hw_page.va_addr), qsz,
                          *data64_le(0)]
