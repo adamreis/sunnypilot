@@ -388,10 +388,17 @@ def main(demo=False):
       model = ModelState(cam_w=vipc_client_main.width, cam_h=vipc_client_main.height, usbgpu=True)
     t = threading.Thread(target=load, daemon=True)
     t.start()
-    t.join(60)
+    # 60s was too tight for a model this size on the USB GPU.  Measured on a
+    # comma four with BMRLNAP, cold page cache, n=1 per firmware:
+    #   stock ed4e39b7  66.6s      our usb4 build f7ac70ba  69.0s
+    #   pre-fix 44479dea 64.8/65.3s
+    # The load SUCCEEDS at ~65s -- only the deadline was wrong, and it killed
+    # modeld_tinygrad outright ("process not running").  Warm cache lands ~38s,
+    # so the old cap only held while the model chunks were still resident.
+    t.join(180)
     if model is None:
       params.put_bool("UsbGpuActive", False)
-      raise RuntimeError("eGPU model load failed or timed out (60s)")
+      raise RuntimeError("eGPU model load failed or timed out (180s)")
     params.put_bool("UsbGpuActive", True)
   else:
     model = ModelState(cam_w=vipc_client_main.width, cam_h=vipc_client_main.height, usbgpu=False)
