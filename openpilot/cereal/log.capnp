@@ -725,6 +725,11 @@ struct ChestnutState {
   pcieLtssm @7 :UInt8;
   supplyVoltage @8 :UInt16;  # mV
   supplyCurrent @9 :Int16;  # mA
+  # Monotonic count of model frames discarded for non-finite output, this run.
+  # Sits beside pcieLtssm/supplyVoltage deliberately: those are the most likely
+  # explanation for a rising count. Cumulative rather than a rate so it stays
+  # comparable across drives -- cf. PandaState.spiErrorCount.
+  nonFiniteOutputs @10 :UInt32;
 }
 
 struct RadarState @0x9a185389d6fdd05f {
