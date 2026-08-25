@@ -388,17 +388,23 @@ def main(demo=False):
       model = ModelState(cam_w=vipc_client_main.width, cam_h=vipc_client_main.height, usbgpu=True)
     t = threading.Thread(target=load, daemon=True)
     t.start()
-    # 60s was too tight for a model this size on the USB GPU.  Measured on a
-    # comma four with BMRLNAP, cold page cache, n=1 per firmware:
-    #   stock ed4e39b7  66.6s      our usb4 build f7ac70ba  69.0s
-    #   pre-fix 44479dea 64.8/65.3s
-    # The load SUCCEEDS at ~65s -- only the deadline was wrong, and it killed
-    # modeld_tinygrad outright ("process not running").  Warm cache lands ~38s,
-    # so the old cap only held while the model chunks were still resident.
-    t.join(180)
+    # This deadline only bounds FAILURE: on success modeld continues as soon as
+    # the load returns, so raising it costs nothing when things work.
+    #
+    # 60s was below the load time outright and killed modeld_tinygrad at startup
+    # ("process not running", no openpilot).  Measured cold on a comma four with
+    # BMRLNAP, one script, same session:
+    #   stock ed4e39b7 66.6s   44479dea 64.8/65.3s   f7ac70ba 69.0/66.3s
+    # then 50.5/52.2s after batching the USB MMIO writes in tinygrad.
+    #
+    # 120s is ~2.4x the current load and still ~1.8x the pre-optimisation load,
+    # which matters because those tinygrad patches live in vendored tinygrad_repo
+    # and would be lost if it is ever re-synced from upstream -- the load would
+    # silently return to ~67s and a tighter cap would fail again.
+    t.join(120)
     if model is None:
       params.put_bool("UsbGpuActive", False)
-      raise RuntimeError("eGPU model load failed or timed out (180s)")
+      raise RuntimeError("eGPU model load failed or timed out (120s)")
     params.put_bool("UsbGpuActive", True)
   else:
     model = ModelState(cam_w=vipc_client_main.width, cam_h=vipc_client_main.height, usbgpu=False)
